@@ -254,6 +254,8 @@ func (prs *PrometheusRuleSelector) Select(namespaces []string) (PrometheusRuleSe
 		rules           = make(TypedResourcesSelection[*monitoringv1.PrometheusRule], len(promRules))
 		namespacedNames = make([]string, 0, len(promRules))
 	)
+	accessor := NewAccessor(prs.logger)
+
 	for ruleName, promRule := range promRules {
 		var err error
 		var content string
@@ -277,15 +279,21 @@ func (prs *PrometheusRuleSelector) Select(namespaces []string) (PrometheusRuleSe
 			reason = InvalidConfigurationEvent
 		}
 
-		rules[ruleName] = TypedConfigurationResource[*monitoringv1.PrometheusRule]{
+		if err == nil {
+			marshalRules[ruleName] = content
+			namespacedNames = append(namespacedNames, fmt.Sprintf("%s/%s", promRule.Namespace, promRule.Name))
+		}
+
+		k, ok := accessor.MetaNamespaceKey(promRule)
+
+		if !ok {
+			continue
+		}
+		rules[k] = TypedConfigurationResource[*monitoringv1.PrometheusRule]{
 			resource:   promRule,
 			err:        err,
 			reason:     reason,
 			generation: promRule.GetGeneration(),
-		}
-		if err == nil {
-			marshalRules[ruleName] = content
-			namespacedNames = append(namespacedNames, fmt.Sprintf("%s/%s", promRule.Namespace, promRule.Name))
 		}
 	}
 
